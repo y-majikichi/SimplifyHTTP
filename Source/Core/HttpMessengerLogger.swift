@@ -14,6 +14,25 @@ public enum LogLevel: Int {
     case info = 3
     case warning = 4
     case error = 5
+    
+    public var tag: String {
+        let logTag: String
+        switch self {
+        case .error:
+            logTag = "E"
+        case .verbose:
+            logTag = "V"
+        case .warning:
+            logTag = "W"
+        case .info:
+            logTag = "I"
+        case .debug:
+            fallthrough
+        default:
+            logTag = "D"
+        }
+        return logTag
+    }
 }
 
 public class LogDetail {
@@ -24,7 +43,7 @@ public class LogDetail {
     let fileInfo: Bool
     let funcNmae: Bool
     
-    public init(_ logLevel: LogLevel = .none, dateFormatter: DateFormatter? = nil, date: Bool = false, level: Bool = false, fileInfo: Bool = false, funcNmae: Bool = false) {
+    public init(_ logLevel: LogLevel = .none, dateFormatter: DateFormatter? = nil, date: Bool = false, level: Bool = false, fileInfo: Bool = false, funcName: Bool = false) {
         self.logLevel = logLevel
         if let dateFormat = dateFormatter {
             self.dateFormatter = dateFormat
@@ -36,7 +55,7 @@ public class LogDetail {
         self.date = date
         self.level = level
         self.fileInfo = fileInfo
-        self.funcNmae = funcNmae
+        self.funcNmae = funcName
     }
 }
 
@@ -58,22 +77,7 @@ open class HttpMessengerLogger {
         }
         
         if detail.level {
-            var defs = ""
-            switch logLevel {
-            case .error:
-                defs = "E"
-            case .verbose:
-                defs = "V"
-            case .warning:
-                defs = "W"
-            case .info:
-                defs = "I"
-            case .debug:
-                fallthrough
-            default:
-                defs = "D"
-            }
-            log += "[\(defs)] "
+            log += "[\(logLevel.tag)] "
         }
         
         if detail.fileInfo {

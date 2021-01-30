@@ -31,7 +31,7 @@
                                 <rect key="frame" x="20" y="106" width="374" height="246.5"/>
                                 <subviews>
                                     <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" distribution="equalSpacing" alignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="WKO-pm-9TS">
-                                        <rect key="frame" x="0.0" y="0.0" width="374" height="90"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="374" height="150"/>
                                         <subviews>
                                             <button opaque="NO" contentMode="scaleToFill" verticalHuggingPriority="249" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="oL5-uX-JIz">
                                                 <rect key="frame" x="142" y="0.0" width="90" height="30"/>
@@ -52,6 +52,20 @@
                                                 <state key="normal" title="GET Image Request"/>
                                                 <connections>
                                                     <action selector="getImageRequestTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="Ohx-wf-Fhp"/>
+                                                </connections>
+                                            </button>
+                                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="FPa-q2-xC0">
+                                                <rect key="frame" x="137" y="90" width="100" height="30"/>
+                                                <state key="normal" title="DownloadTask"/>
+                                                <connections>
+                                                    <action selector="dounloadTaskTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="tP1-Or-nPI"/>
+                                                </connections>
+                                            </button>
+                                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="FDW-95-8uE">
+                                                <rect key="frame" x="159.5" y="120" width="55" height="30"/>
+                                                <state key="normal" title="Resume"/>
+                                                <connections>
+                                                    <action selector="resumeTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="cnL-7k-cwa"/>
                                                 </connections>
                                             </button>
                                         </subviews>
@@ -86,6 +100,7 @@
                     </view>
                     <navigationItem key="navigationItem" id="LvN-5K-eZq"/>
                     <connections>
+                        <outlet property="donwloadTaskButton" destination="FPa-q2-xC0" id="CEu-ia-A5Z"/>
                         <outlet property="getButton" destination="oL5-uX-JIz" id="66D-Xf-haT"/>
                         <outlet property="getImageRequest" destination="3ge-WT-U0Q" id="Kip-Rk-7NF"/>
                         <outlet property="getRequestWithBasicAuthButton" destination="EcU-5e-EyZ" id="YQc-gB-W6W"/>

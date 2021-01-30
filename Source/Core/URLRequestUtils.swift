@@ -31,10 +31,10 @@ extension URLResponse {
         
     }
     
-    func statusCodeAsHttpStatus(defaultStatus: HttpStatus = .badRequest) -> HttpStatus {
+    func statusCodeAsHttpStatus(defaultStatus: HTTPStatus = .badRequest) -> HTTPStatus {
         if let responseSelf = self as? HTTPURLResponse {
             let statusCode = responseSelf.statusCode
-            return HttpStatus.init(rawValue: statusCode) ?? defaultStatus
+            return HTTPStatus.init(rawValue: statusCode) ?? defaultStatus
         } else {
             return defaultStatus
         }
@@ -42,7 +42,7 @@ extension URLResponse {
     
     func isSuccess() -> Bool {
         let statusCode = statusCodeAsHttpStatus()
-        return (statusCode.rawValue >= HttpStatus.ok.rawValue && statusCode.rawValue < HttpStatus.multipleChoices.rawValue)
+        return (statusCode.rawValue >= HTTPStatus.ok.rawValue && statusCode.rawValue < HTTPStatus.multipleChoices.rawValue)
     }
 }
 
@@ -91,9 +91,9 @@ extension URLRequest {
 
 class URLRequestUtils {
     
-    static func makeHeaders(_ defaultHeaders: [HTTPHeader], sdkHeaders:[String : String]?, append:[String : String]?) -> [String : String]? {
+    static func makeHeaders(_ defaultHeaders: HTTPHeaders, sdkHeaders:[String : String]?, append:[String : String]?) -> [String : String]? {
         var fullHeader:[String : String]? = sdkHeaders
-        if let defaultHeaders = HTTPHeader.convert(defaultHeaders) {
+        if let defaultHeaders = HTTPHeaders.convert(defaultHeaders) {
             if fullHeader == nil {
                 fullHeader = defaultHeaders
             } else {
@@ -118,15 +118,15 @@ class URLRequestUtils {
         return fullHeader
     }
     
-    static func makeHeaders(_ defaultHeaders: [HTTPHeader], sdkHeaders:[String : String]?, append:[HTTPHeader]?) -> [String : String]? {
-        return makeHeaders(defaultHeaders, sdkHeaders: sdkHeaders, append: HTTPHeader.convert(append))
+    static func makeHeaders(_ defaultHeaders: HTTPHeaders, sdkHeaders: [String : String]?, append: HTTPHeaders?) -> [String : String]? {
+        return makeHeaders(defaultHeaders, sdkHeaders: sdkHeaders, append: HTTPHeaders.convert(append))
     }
     
     private static func makeBaseRequest(_ url:URL,
                             cachePolicy: URLRequest.CachePolicy,
                             timeoutInterval: TimeInterval,
                             methodType: HTTPMethodType,
-                            defaultHeaders: [HTTPHeader],
+                            defaultHeaders: HTTPHeaders,
                             headers:[String : String]? = nil) -> URLRequest {
         var request = URLRequest(url: url, cachePolicy: cachePolicy, timeoutInterval: timeoutInterval)
         request.allHTTPHeaderFields = makeHeaders(defaultHeaders, sdkHeaders: request.allHTTPHeaderFields, append: headers)
@@ -139,7 +139,8 @@ class URLRequestUtils {
                             timeoutInterval: TimeInterval,
                             methodType: HTTPMethodType,
                             requestSerializer: RequestSerializer,
-                            defaultHeaders: [HTTPHeader],
+                            responseDeserializer: ResponseDeserializer,
+                            defaultHeaders: HTTPHeaders,
                             headers:[String : String]? = nil,
                             parameters:Any? = nil) throws -> URLRequest {
         let postUrl: URL
@@ -157,7 +158,6 @@ class URLRequestUtils {
                         if let value = query.value?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                             let tmp = query.name + "=" + value
                             if queryString != "?" {
-                                // 初期値ではない場合&を追加
                                 queryString += "&"
                             }
                             queryString += tmp
@@ -177,9 +177,82 @@ class URLRequestUtils {
                                       methodType: methodType,
                                       defaultHeaders: defaultHeaders,
                                       headers: headers)
-        // ここまで来たら、ヘッダにcontent-type append
-        if let contentType = requestSerializer.contentType, request.allHTTPHeaderFields != nil {
-            request.allHTTPHeaderFields?.updateValue(contentType, forKey: HTTPHeader.kKeyContentType)
+        // content-type append
+        if request.allHTTPHeaderFields == nil {
+            request.allHTTPHeaderFields = [:]
+        }
+        if let contentType = requestSerializer.contentType {
+            request.allHTTPHeaderFields?.updateValue(contentType, forKey: HTTPHeaderKey.contentType.rawValue)
+        }
+        // Accept append
+        if responseDeserializer.acceptContentTypes.count > 0 {
+            // to
+            let accepts = responseDeserializer.acceptContentTypes.joined(separator: ", ")
+            request.allHTTPHeaderFields?.updateValue(accepts, forKey: HTTPHeaderKey.accept.rawValue)
+        } else {
+            request.allHTTPHeaderFields?.updateValue("*/*", forKey: HTTPHeaderKey.accept.rawValue)
+        }
+        request.httpBody = body
+        return request
+    }
+    
+    static func makeRequest<EncodableData: Encodable>(_ url:URL,
+                            cachePolicy: URLRequest.CachePolicy,
+                            timeoutInterval: TimeInterval,
+                            methodType: HTTPMethodType,
+                            requestSerializer: EncodableSerializer,
+                            responseDeserializer: ResponseDeserializer,
+                            defaultHeaders: HTTPHeaders,
+                            headers:[String : String]? = nil,
+                            parameters:EncodableData? = nil) throws -> URLRequest {
+        let postUrl: URL
+        var body: Data? = nil
+        if methodType != .get || (methodType == .get && requestSerializer.forcedBodyWhenGet) {
+            postUrl = url
+            body = try requestSerializer.encode(parameters)
+        } else {
+            // url append
+            if let serializer: QueryRequestSerializer = requestSerializer as? QueryRequestSerializer {
+                let queries: [URLQueryItem]? = try serializer.encode(parameters)
+                if let queries = queries, queries.count > 0 {
+                    var queryString = "?"
+                    for query in queries {
+                        if let value = query.value?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                            let tmp = query.name + "=" + value
+                            if queryString != "?" {
+                                queryString += "&"
+                            }
+                            queryString += tmp
+                        }
+                    }
+                    postUrl = URL(string: (url.absoluteString + queryString))!
+                } else {
+                    postUrl = url
+                }
+            } else {
+                postUrl = url
+            }
+        }
+        var request = makeBaseRequest(postUrl,
+                                      cachePolicy: cachePolicy,
+                                      timeoutInterval: timeoutInterval,
+                                      methodType: methodType,
+                                      defaultHeaders: defaultHeaders,
+                                      headers: headers)
+        // content-type append
+        if request.allHTTPHeaderFields == nil {
+            request.allHTTPHeaderFields = [:]
+        }
+        if let contentType = requestSerializer.contentType {
+            request.allHTTPHeaderFields?.updateValue(contentType, forKey: HTTPHeaderKey.contentType.rawValue)
+        }
+        // Accept append
+        if responseDeserializer.acceptContentTypes.count > 0 {
+            // to
+            let accepts = responseDeserializer.acceptContentTypes.joined(separator: ", ")
+            request.allHTTPHeaderFields?.updateValue(accepts, forKey: HTTPHeaderKey.accept.rawValue)
+        } else {
+            request.allHTTPHeaderFields?.updateValue("*/*", forKey: HTTPHeaderKey.accept.rawValue)
         }
         request.httpBody = body
         return request
@@ -189,7 +262,7 @@ class URLRequestUtils {
                                   cachePolicy: URLRequest.CachePolicy,
                                   timeoutInterval: TimeInterval,
                                   methodType: HTTPMethodType,
-                                  defaultHeaders: [HTTPHeader],
+                                  defaultHeaders: HTTPHeaders,
                                   headers:[String : String]? = nil) throws -> URLRequest {
         return makeBaseRequest(url,
                                cachePolicy: cachePolicy,
@@ -204,7 +277,7 @@ class URLRequestUtils {
                                     timeoutInterval: TimeInterval,
                                     methodType: HTTPMethodType,
                                     requestSerializer: RequestSerializer,
-                                    defaultHeaders: [HTTPHeader],
+                                    defaultHeaders: HTTPHeaders,
                                     headers:[String : String]? = nil) throws -> URLRequest {
         return makeBaseRequest(url,
                                cachePolicy: cachePolicy,

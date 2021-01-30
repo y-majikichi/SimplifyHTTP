@@ -9,15 +9,17 @@ import Foundation
 
 class URLSessionDelegateImpl: NSObject {
     
-    typealias RequestProgress = (_ task: URLSessionTask?, _ didSendBytesSent: Int64, _ totalBytesToSend: Int64, _ totalBytesExpectedToSend: Int64) -> Void
-    typealias ResponseProgress = (_ task: URLSessionTask?, _ didReceiveBytes: Int64, _ totalBytesReceived: Int64, _ totalBytesReceiveExpected: Int64) -> Void
-    typealias ResponseIntercepter = (_ data: Data?, _ task: URLSessionTask, _ urlResponse: URLResponse?, _ error: Error?) -> Error?
-    typealias Completion = (_ task: URLSessionTask, _ urlResponse: URLResponse?, _ data: Data?, _ error: HttpMessengerError?) -> Void
+    typealias RequestProgress     = (_ task: URLSessionTask, _ didSendBytesSent: Int64, _ totalBytesToSend: Int64, _ totalBytesExpectedToSend: Int64) -> Void
+    typealias ResponseProgress    = (_ task: URLSessionTask, _ didReceiveBytes: Int64, _ totalBytesReceived: Int64, _ totalBytesReceiveExpected: Int64) -> Void
+    typealias ResponseIntercepter = (_ data: Any?, _ task: URLSessionTask, _ urlResponse: URLResponse?, _ error: Error?) -> Error?
+    typealias Completion = (_ task: URLSessionTask, _ urlResponse: URLResponse?, _ data: Any?, _ error: HttpMessengerError?) -> Void
     
-    var data: [URLSessionTask : Data] = [:]
+    var dataTaskData: [URLSessionTask : Any?] = [:]
+    
     weak var trustManagerDelegate: TrustManagerDelegate? = nil
     
-    private var blocks: [URLSessionTask : (intercepter: ResponseIntercepter?,
+    private var blocks: [URLSessionTask : (downloadDeserializer: DownloadResponseDeserializer?,
+                                           intercepter: ResponseIntercepter?,
                                            requestProgress: RequestProgress?,
                                            responseProgress: ResponseProgress?,
                                            completion: Completion?)]
@@ -29,15 +31,17 @@ class URLSessionDelegateImpl: NSObject {
     
     deinit {
         self.blocks.removeAll()
-        data.removeAll()
+        dataTaskData.removeAll()
     }
     
     func register(_ task: URLSessionTask,
+                  downloadDeserializer: DownloadResponseDeserializer? = nil,
                   intercepter: ResponseIntercepter? = nil,
                   requestProgress: RequestProgress? = nil,
                   responseProgress: ResponseProgress? = nil,
                   completion: Completion? = nil) {
-        blocks.updateValue((intercepter: intercepter,
+        blocks.updateValue((downloadDeserializer: downloadDeserializer,
+                            intercepter: intercepter,
                             requestProgress: requestProgress,
                             responseProgress: responseProgress,
                             completion: completion),
@@ -48,7 +52,19 @@ class URLSessionDelegateImpl: NSObject {
         blocks.removeValue(forKey: task)
     }
     
-    func executeIntercepter(_ task: URLSessionTask, data: Data?, _ urlResponse: URLResponse?, _ error: HttpMessengerError?) -> Error? {
+    func removeAll() {
+        blocks.removeAll()
+    }
+    
+    func executeDonwloadSave(_ task: URLSessionDownloadTask, url: URL) throws -> Bool {
+        if let inter = blocks[task]?.downloadDeserializer {
+            return try inter.save(url)
+        } else {
+            return false
+        }
+    }
+    
+    func executeIntercepter(_ task: URLSessionTask, data: Any?, _ urlResponse: URLResponse?, _ error: HttpMessengerError?) -> Error? {
         if let inter = blocks[task]?.intercepter {
             return inter(data, task, urlResponse, error)
         } else {
@@ -67,7 +83,7 @@ class URLSessionDelegateImpl: NSObject {
         blocks[task]?.responseProgress?(task, didReceiveBytes, totalBytesReceived, totalBytesReceiveExpected)
     }
     
-    func executeCompletion(_ task: URLSessionTask, urlResponse: URLResponse?, data: Data?, error: HttpMessengerError?) {
+    func executeCompletion(_ task: URLSessionTask, urlResponse: URLResponse?, data: Any?, error: HttpMessengerError?) {
         blocks[task]?.completion?(task, urlResponse, data, error)
     }
 }
@@ -77,7 +93,7 @@ extension URLSessionDelegateImpl: URLSessionDelegate {
     @available(macOS 10.9, *)
     func urlSession(_ session: URLSession,
                     didBecomeInvalidWithError error: Error?) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Error : " + (error?.localizedDescription ?? "Not Defined"))
     }
 
     
@@ -85,10 +101,11 @@ extension URLSessionDelegateImpl: URLSessionDelegate {
     func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        HttpMessengerSession.logger?.d("a")
         if let manager = trustManagerDelegate {
+            HttpMessengerSession.logger?.d("Respond trustManager Delegate")
             manager.trustManager(session, didReceive: challenge, completionHandler: completionHandler)
         } else {
+            HttpMessengerSession.logger?.d("Default Handle")
             completionHandler(.performDefaultHandling, challenge.proposedCredential)
         }
     }
@@ -101,7 +118,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
                     task: URLSessionTask,
                     willBeginDelayedRequest request: URLRequest,
                     completionHandler: @escaping (URLSession.DelayedRequestDisposition, URLRequest?) -> Void) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Delayed Request : " + (request.url?.absoluteString ?? "Not Defined URL"))
         completionHandler(.continueLoading, request)
     }
 
@@ -109,7 +126,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
     @available(macOS 10.13, iOS 11.0, *)
     func urlSession(_ session: URLSession,
                     taskIsWaitingForConnectivity task: URLSessionTask) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Waiting Connectivity")
     }
 
     
@@ -119,7 +136,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Redirect New :" + (request.url?.absoluteString ?? "Not Defined URL"))
         completionHandler(request)
     }
 
@@ -129,10 +146,11 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
                     task: URLSessionTask,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        HttpMessengerSession.logger?.d("a")
         if let manager = trustManagerDelegate {
+            HttpMessengerSession.logger?.d("Respond trustManager Delegate")
             manager.trustManager(session, task: task, didReceive: challenge, completionHandler: completionHandler)
         } else {
+            HttpMessengerSession.logger?.d("Default Handle")
             completionHandler(.performDefaultHandling, challenge.proposedCredential)
         }
     }
@@ -142,7 +160,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("New Body Stream")
         // TODO:
         completionHandler(nil)
     }
@@ -154,7 +172,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
                     didSendBodyData bytesSent: Int64,
                     totalBytesSent: Int64,
                     totalBytesExpectedToSend: Int64) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Request Progress")
         executeRequestProgress(task,
                                didSendBytesSent: bytesSent,
                                totalBytesToSend: totalBytesSent,
@@ -166,7 +184,7 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     didFinishCollecting metrics: URLSessionTaskMetrics) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Finish Collecting")
     }
 
     
@@ -174,13 +192,18 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     didCompleteWithError error: Error?) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Finish Requests")
         // 引っ張る
-        let data = self.data[task]
+        // Error or URL or Data or nil
+        let data = self.dataTaskData[task] ?? nil
         // 消す
-        self.data.removeValue(forKey: task)
+        self.dataTaskData.removeValue(forKey: task)
+        var submitError = error
+        if error == nil, let er = data as? Error {
+            submitError = er
+        }
         // intercept
-        let interceptResult = executeIntercepter(task, data: data, task.response, (error != nil ? .networkingError(from: error!) : nil))
+        let interceptResult = executeIntercepter(task, data: data, task.response, (submitError != nil ? .networkingError(from: submitError!) : nil))
         // 丁寧に
         var retError: HttpMessengerError? = nil
         if let inter = interceptResult as? HttpMessengerError {
@@ -192,6 +215,8 @@ extension URLSessionDelegateImpl: URLSessionTaskDelegate {
                           urlResponse: task.response,
                           data: data,
                           error: retError)
+        // Blockクリア
+        self.blocks.removeValue(forKey: task)
     }
 }
 
@@ -202,7 +227,7 @@ extension URLSessionDelegateImpl: URLSessionDataDelegate {
                     dataTask: URLSessionDataTask,
                     didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        HttpMessengerSession.logger?.d("a")
+        HttpMessengerSession.logger?.d("Response Received")
         completionHandler(.allow)
     }
 
@@ -228,15 +253,19 @@ extension URLSessionDelegateImpl: URLSessionDataDelegate {
                     dataTask: URLSessionDataTask,
                     didReceive data: Data) {
         HttpMessengerSession.logger?.d("a")
-        if self.data[dataTask] != nil {
-            self.data[dataTask]?.append(data)
+        let bytes: Int
+        if self.dataTaskData[dataTask] != nil, var taskData = self.dataTaskData[dataTask] as? Data {
+            taskData.append(data)
+            self.dataTaskData.updateValue(taskData, forKey: dataTask)
+            bytes = taskData.count
         } else {
-            self.data.updateValue(data, forKey: dataTask)
+            self.dataTaskData.updateValue(data, forKey: dataTask)
+            bytes = data.count
         }
         if let response = dataTask.response {
             executeResponseProgress(dataTask,
                                     didReceiveBytes: Int64(data.count),
-                                    totalBytesReceived: Int64(self.data[dataTask]!.count),
+                                    totalBytesReceived: Int64(bytes),
                                     totalBytesReceiveExpected: response.expectedContentLength)
         }
     }
@@ -254,12 +283,17 @@ extension URLSessionDelegateImpl: URLSessionDataDelegate {
 
 extension URLSessionDelegateImpl: URLSessionDownloadDelegate {
 
-    
     @available(macOS 10.9, *)
     func urlSession(_ session: URLSession,
                     downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
         HttpMessengerSession.logger?.d("a")
+        do {
+            _ = try executeDonwloadSave(downloadTask, url: location)
+            self.dataTaskData.updateValue(self.blocks[downloadTask]?.downloadDeserializer?.saveURL, forKey: downloadTask)
+        } catch {
+            self.dataTaskData.updateValue(error, forKey: downloadTask)
+        }
     }
 
     
@@ -270,6 +304,10 @@ extension URLSessionDelegateImpl: URLSessionDownloadDelegate {
                     totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
         HttpMessengerSession.logger?.d("a")
+        executeResponseProgress(downloadTask,
+                                didReceiveBytes: bytesWritten,
+                                totalBytesReceived: totalBytesWritten,
+                                totalBytesReceiveExpected: totalBytesExpectedToWrite)
     }
 
     

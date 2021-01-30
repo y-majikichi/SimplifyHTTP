@@ -7,10 +7,10 @@
 
 import Foundation
 
-public class HttpMessengerLoggerActivityLogger: HttpMessengerLogger {
+public class HttpMessengerActivityLogger: HttpMessengerLogger {
     
     public init(_ logLevel: LogLevel = .debug) {
-        let logDetail = LogDetail(logLevel, dateFormatter: nil, date: true, level: true, fileInfo: true, funcNmae: true)
+        let logDetail = LogDetail(logLevel, dateFormatter: nil, date: true, level: true, fileInfo: true, funcName: true)
         super.init(logDetail)
     }
     
@@ -22,7 +22,7 @@ public class HttpMessengerLoggerActivityLogger: HttpMessengerLogger {
 public class SystemNetworkingActivityLogger: HttpMessengerLogger {
     
     public init(_ logLevel: LogLevel = .debug) {
-        let logDetail = LogDetail(logLevel, dateFormatter: nil, date: false, level: true, fileInfo: true, funcNmae: true)
+        let logDetail = LogDetail(logLevel, dateFormatter: nil, date: false, level: true, fileInfo: true, funcName: true)
         super.init(logDetail)
     }
     

@@ -14,7 +14,7 @@ public enum HttpMessengerError: Error {
     case decoderError
     case unknownError
     case networkingError(from: Error)
-    case statusError(status: HttpStatus)
+    case statusError(status: HTTPStatus)
     case responseError
     case invalidSerializer(now: RequestSerializer, pormise: RequestSerializer)
     case invalidSerializedType
@@ -42,7 +42,7 @@ extension HttpMessengerError {
         }
     }
     
-    var status: HttpStatus? {
+    var status: HTTPStatus? {
         switch self {
         case .statusError(status: let status):
             return status

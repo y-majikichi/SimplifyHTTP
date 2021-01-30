@@ -7,8 +7,14 @@
 
 import Foundation
 
-public enum HeaderKey: String, Codable {
+public enum HTTPHeaderKey: String, Codable {
     case contentType = "Content-Type"
+    case setCookie = "Set-Cookie"
+    case cookie = "Cookie"
+    case userAgent = "User-Agent"
+    case accept = "Accept"
+    case acceptLanguage = "Accept-Language"
+    case acceptEncoding = "Accept-Encoding"
 }
 
 public enum HTTPMethodType: String, Codable {
@@ -24,7 +30,7 @@ public enum HTTPScheme: String, Codable {
     case http = "http://"
 }
 
-public enum HttpStatus: Int, Codable {
+public enum HTTPStatus: Int, Codable {
     case `continue` = 100
     case switchingProtocols = 101
     case processing = 102
